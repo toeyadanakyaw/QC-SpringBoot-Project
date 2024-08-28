@@ -1,6 +1,7 @@
 package com.announce.AcknowledgeHub_SpringBoot.service;
 
 import com.announce.AcknowledgeHub_SpringBoot.entity.Announcement;
+import com.announce.AcknowledgeHub_SpringBoot.entity.AnnouncementReadStatus;
 import com.announce.AcknowledgeHub_SpringBoot.entity.Group;
 import com.announce.AcknowledgeHub_SpringBoot.entity.User;
 import com.announce.AcknowledgeHub_SpringBoot.repository.AnnouncementRepository;
@@ -12,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.mail.MessagingException;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -78,7 +81,7 @@ public class AnnouncementService {
         return announcementRepository.save(announcement);
     }
 
-    public boolean sendAnnouncement(Integer announcementId) throws MessagingException, IOException {
+    public boolean sendAnnouncement(Integer announcementId) throws MessagingException, IOException, TelegramApiException {
         Announcement announcement = announcementRepository.findById(Long.valueOf(announcementId))
                 .orElseThrow(() -> new RuntimeException("Announcement not found"));
 
@@ -106,7 +109,7 @@ public class AnnouncementService {
     }
 
     @Transactional
-    protected void sendAnnouncementImmediately(Integer announcementId) throws MessagingException, IOException {
+    protected void sendAnnouncementImmediately(Integer announcementId) throws MessagingException, IOException, TelegramApiException {
         Announcement announcement = announcementRepository.findById(Long.valueOf(announcementId))
                 .orElseThrow(() -> new RuntimeException("Announcement not found"));
 
@@ -131,7 +134,8 @@ public class AnnouncementService {
             telegramUserIds.addAll(staffService.getTelegramUserIdByGroupId(group.getId()));
         }
 
-        for (User staff : announcement.getStaffMembers()) {
+        for (AnnouncementReadStatus user : announcement.getStaffMembers()) {
+            User staff = user.getStaff();
             emailAddresses.add(staff.getEmail());
             telegramUserIds.add(staff.getTelegram_user_id());
         }
@@ -143,7 +147,7 @@ public class AnnouncementService {
                 emailService.sendEmailWithAttachment(email, announcement.getTitle(), announcement.getContent(), fileBytes, fileName);
             }
             for (Long tuid : telegramUserIds) {
-                announcementBotService.sendAnnouncementWithPDF(tuid, announcement.getTitle(), announcement.getContent(), fileBytes, fileName, announcement.getUser(), announcementId);
+                announcementBotService.sendAnnouncementWithPDF(tuid, announcement, fileBytes);
             }
             announcement.setSent(1);
             announcementRepository.save(announcement);

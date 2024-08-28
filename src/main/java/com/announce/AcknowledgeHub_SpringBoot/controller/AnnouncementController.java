@@ -1,12 +1,11 @@
 package com.announce.AcknowledgeHub_SpringBoot.controller;
 
-import com.announce.AcknowledgeHub_SpringBoot.entity.Group;
-import com.announce.AcknowledgeHub_SpringBoot.entity.Notification;
-import com.announce.AcknowledgeHub_SpringBoot.entity.User;
+import com.announce.AcknowledgeHub_SpringBoot.entity.*;
 import com.announce.AcknowledgeHub_SpringBoot.model.AnnouncementDTO;
-import com.announce.AcknowledgeHub_SpringBoot.entity.Announcement;
+import com.announce.AcknowledgeHub_SpringBoot.repository.AnnouncementReadStatusRepository;
 import com.announce.AcknowledgeHub_SpringBoot.repository.NotificationRepo;
 import com.announce.AcknowledgeHub_SpringBoot.repository.UserRepository;
+import com.announce.AcknowledgeHub_SpringBoot.service.AnnouncementBotService;
 import com.announce.AcknowledgeHub_SpringBoot.service.AnnouncementService;
 import com.announce.AcknowledgeHub_SpringBoot.service.StaffService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -22,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.IOException;
 import java.util.Date;
@@ -35,29 +35,29 @@ import java.util.stream.Collectors;
 @CrossOrigin(origins = "http://localhost:4200")
 public class AnnouncementController {
 
-    @Autowired
-    private ModelMapper mapper;
+    private final ModelMapper mapper;
+    private final AnnouncementService announcementService;
+    private final StaffService staffService;
+    private final UserRepository userRepository;
+    private final NotificationRepo notificationRepo;
+    private final SimpMessagingTemplate simpMessagingTemplate;
+    private final AnnouncementBotService announcementBotService;
+    private final AnnouncementReadStatusRepository announcementReadStatusRepository;
 
-    @Autowired
-    private AnnouncementService announcementService;
-
-    @Autowired
-    private StaffService staffService;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private NotificationRepo notificationRepo;
-
-    @Autowired
-    private SimpMessagingTemplate simpMessagingTemplate;
-
-
+    public AnnouncementController(ModelMapper mapper, AnnouncementService announcementService, StaffService staffService, UserRepository userRepository, NotificationRepo notificationRepo, SimpMessagingTemplate simpMessagingTemplate, AnnouncementBotService announcementBotService, AnnouncementReadStatusRepository announcementReadStatusRepository) {
+        this.mapper = mapper;
+        this.announcementService = announcementService;
+        this.staffService = staffService;
+        this.userRepository = userRepository;
+        this.notificationRepo = notificationRepo;
+        this.simpMessagingTemplate = simpMessagingTemplate;
+        this.announcementBotService = announcementBotService;
+        this.announcementReadStatusRepository = announcementReadStatusRepository;
+    }
 
     @PostMapping(consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> createAnnouncement(@RequestPart(value = "file") MultipartFile file,
-                                                @RequestPart("data") String data) throws MessagingException, IOException {
+                                                @RequestPart("data") String data) throws MessagingException, IOException, TelegramApiException {
 
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
@@ -71,7 +71,16 @@ public class AnnouncementController {
 
         announcementEntity.setDocumentName(file.getOriginalFilename());
         announcementEntity.setGroups(selectedGroups);
-        announcementEntity.setStaffMembers(selectedStaff);
+        List<AnnouncementReadStatus> announcementUsers = selectedStaff.stream()
+                .map(temp -> {
+                    AnnouncementReadStatus staff = new AnnouncementReadStatus();
+                    staff.setAnnouncement(announcementEntity);
+                    staff.setStaff(temp);
+                    // Set additional columns if needed
+                    return staff;
+                })
+                .toList();
+        announcementEntity.setStaffMembers(announcementUsers);
         announcementEntity.setUser(user);
 
         Announcement createdAnnouncement = announcementService.createAnnouncement(announcementEntity, file, false);
@@ -79,6 +88,24 @@ public class AnnouncementController {
         if (!isSent) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body("Announcement has already been sent.");
+        }
+
+        // Send the announcement via Telegram bot and get the message ID
+        for (User recipient : selectedStaff) {
+            Long chatId = recipient.getTelegram_user_id();
+            byte[] fileBytes = file.getBytes();
+            int messageId = announcementBotService.sendAnnouncementWithPDF(chatId, createdAnnouncement, fileBytes);
+
+            // Update the AnnouncementReadStatus with the message ID and set as not read
+            AnnouncementReadStatus readStatus = announcementUsers.stream()
+                    .filter(status -> status.getStaff().equals(recipient))
+                    .findFirst()
+                    .orElse(null);
+            if (readStatus != null) {
+                readStatus.setMessageId(messageId);
+                readStatus.setIsRead(false); // Initially, the announcement is not read
+                announcementReadStatusRepository.save(readStatus);
+            }
         }
 
         // Filter and notify only after the announcement has been sent

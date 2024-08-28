@@ -260,61 +260,36 @@ public class AnnouncementBotService extends TelegramLongPollingBot {
         }
     }
 
+    public int sendAnnouncementWithPDF(Long chatId, Announcement announcement, byte[] pdfBytes) throws TelegramApiException {
+        String title = announcement.getTitle();
+        String description = announcement.getContent();
+        String pdfFilename = announcement.getDocumentName();
+        String message = title + "\n\n" + description;
+        ByteArrayInputStream pdfStream = new ByteArrayInputStream(pdfBytes);
+        InputFile inputFile = new InputFile(pdfStream, pdfFilename);
 
-    public void sendAnnouncementWithPDF(Long chatId, String title, String description, byte[] pdfBytes, String pdfFilename, User sender, int announcementId) {
-        System.out.println("chatId: " + chatId + " title: " + title + " description: " + description + " pdfFile: " + pdfFilename);
-        try {
-            String message = title + "\n\n" + description;
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+        String formattedDateTime = now.format(formatter);
 
-            ByteArrayInputStream pdfStream = new ByteArrayInputStream(pdfBytes);
-            InputFile inputFile = new InputFile(pdfStream, pdfFilename);
+        User staff = staffRepository.findByTelegramUserIdToGetUName(chatId);
+        String senderUsername = staff.getTelegram_user_name();
 
-            // Get the current date and time when the message is sent
-            LocalDateTime now = LocalDateTime.now();
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-            String formattedDateTime = now.format(formatter);
+        String caption = "Sent by " + staff.getName() + " @" + senderUsername + " on " + formattedDateTime + "\n\n" + message;
 
-            // Retrieve the sender's Telegram username from the database using sender's ID
-                User staff = staffRepository.findByTelegramUserIdToGetUName(sender.getTelegram_user_id());
-            String senderUsername = staff.getTelegram_user_name();
-            // Prepare the caption with the sender's name and Telegram username
-            String caption = "Sent by " + sender.getName() + " @" + senderUsername + " on " + formattedDateTime + "\n\n" + message;
+        SendDocument sendDocument = new SendDocument();
+        sendDocument.setChatId(String.valueOf(chatId));
+        sendDocument.setCaption(caption);
+        sendDocument.setDocument(inputFile);
 
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        InlineKeyboardButton readButton = new InlineKeyboardButton();
+        readButton.setText("🔄 Mark as Read");
+        readButton.setCallbackData("read_" + announcement.getId());
+        markup.setKeyboard(List.of(List.of(readButton)));
+        sendDocument.setReplyMarkup(markup);
 
-            // Send the PDF file with the sender's information
-            SendDocument sendDocument = new SendDocument();
-            sendDocument.setChatId(String.valueOf(chatId));
-            sendDocument.setCaption(caption);
-            sendDocument.setDocument(inputFile);
-
-            // Add a "Mark as Read" button with announcement ID
-            InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
-            InlineKeyboardButton readButton = new InlineKeyboardButton();
-            readButton.setText("🔄 Mark as Read");
-            readButton.setCallbackData("read_" + announcementId);
-            markup.setKeyboard(List.of(List.of(readButton)));
-            sendDocument.setReplyMarkup(markup);
-
-            Message messageObj = execute(sendDocument);
-            int messageId = messageObj.getMessageId();
-
-            // Find the user who received the announcement
-            User recipient = staffRepository.findByTelegramUserIdToGetUName((long) chatId); // Assuming chatId is the user's Telegram ID
-
-            if (recipient != null) {
-                // Store the message ID in the database for the recipient
-                AnnouncementReadStatus readStatus = new AnnouncementReadStatus();
-                readStatus.setStaff(recipient); // Set the recipient user
-                readStatus.setAnnouncement(announcementRepository.findById((long) announcementId).orElse(null));
-                readStatus.setMessageId(messageId);
-                readStatus.setIsRead(false); // Initially, the announcement is not read
-                announcementReadStatusRepository.save(readStatus);
-            } else {
-                System.out.println("Recipient user not found for chatId: " + chatId);
-            }
-
-        } catch (TelegramApiException e) {
-            e.printStackTrace();
-        }
+        Message messageObj = execute(sendDocument);
+        return messageObj.getMessageId();
     }
 }
