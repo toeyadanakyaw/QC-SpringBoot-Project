@@ -117,9 +117,14 @@ public class ImportStaffService {
 //                        }
                         case 3: {
                             String roleName = getCellStringValue(currentCell).trim(); // Trim whitespace
+                            // Normalize the role name by replacing spaces with underscores
+                            roleName = roleName.replace(" ", "_").toUpperCase();
+                            if (!isValidRole(roleName)) {
+                                roleName = addUnderscoreToRoleName(roleName);
+                            }
                             try {
                                 // Use the correct Role enum
-                                staff.setRole(Role.valueOf(roleName.toUpperCase()));
+                                staff.setRole(Role.valueOf(roleName));//.toUpperCase()));
                             } catch (IllegalArgumentException e) {
                                 throw new IllegalArgumentException("Invalid role: " + roleName);
                             }
@@ -304,6 +309,26 @@ public class ImportStaffService {
         // Generate and set registration code
         user.setRegistration_code(generateRegistrationCode());
     }
+
+    // Method to check if a role name is valid
+    private boolean isValidRole(String roleName) {
+        try {
+            Role.valueOf(roleName);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    // Method to insert underscores in common positions for role names
+    private String addUnderscoreToRoleName(String roleName) {
+        if (roleName.equals("MAINHR")) {
+            return "MAIN_HR";
+        }
+        // Add more conditions as needed for other roles
+        return roleName;
+    }
+
 }
 
 

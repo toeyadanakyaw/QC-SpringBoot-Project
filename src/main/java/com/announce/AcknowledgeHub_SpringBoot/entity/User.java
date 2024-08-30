@@ -55,6 +55,12 @@ public class User implements UserDetails {
     @Column(name = "register_status")
     private boolean register_status;
 
+    @Column(name = "photo_url")
+    private String photoUrl;
+
+    @Column(name = "fileExtension")
+    private String fileExtension;
+
     @ManyToOne
     @JoinColumn(name = "department_id")
     private Department department;

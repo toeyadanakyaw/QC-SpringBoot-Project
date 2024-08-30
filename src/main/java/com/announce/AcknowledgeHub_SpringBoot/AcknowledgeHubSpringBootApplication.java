@@ -17,7 +17,7 @@ public class AcknowledgeHubSpringBootApplication {
 	private static final String BOT_TOKEN = "7423927099:AAGJmMp5ps8DBSsepams9rYsi19w-mw6aJw";
 	private static final String BOT_USERNAME = "AnnouncementBot";
 	private final UserRepository userRepository;
-	private final AnnouncementRepository announcementRepository;
+	private final AnnouncementRepository announcementRepository;	
 	private final AnnouncementReadStatusRepository announcementReadStatusRepository;
 
     public AcknowledgeHubSpringBootApplication(UserRepository userRepository, AnnouncementRepository announcementRepository, AnnouncementReadStatusRepository announcementReadStatusRepository) {
