@@ -58,7 +58,6 @@ public class AnnouncementController {
     @PostMapping(consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> createAnnouncement(@RequestPart(value = "file") MultipartFile file,
                                                 @RequestPart("data") String data) throws MessagingException, IOException {
-
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
         objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
