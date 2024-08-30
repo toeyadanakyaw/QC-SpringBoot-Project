@@ -12,5 +12,6 @@ public class UserDTO {
     private byte[] photo;
     private Role role;
     private boolean state;
+    private String ph_number;
 
 }
