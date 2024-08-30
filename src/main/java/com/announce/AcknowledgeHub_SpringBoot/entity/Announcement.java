@@ -64,13 +64,11 @@ public class Announcement {
      )
      private List<Group> groups;
 
-     @ManyToMany(fetch = FetchType.EAGER)
-     @JoinTable(
-             name = "announcement_staff",
-             joinColumns = @JoinColumn(name = "announcement_id"),
-             inverseJoinColumns = @JoinColumn(name = "staff_id")
-     )
-     private List<User> staffMembers;
+     @OneToMany(fetch = FetchType.EAGER,
+             mappedBy = "announcement",
+             cascade = CascadeType.ALL,
+             orphanRemoval = true)
+     private List<AnnouncementReadStatus> staffMembers;
 
      @ManyToOne
      @JoinColumn(name = "user_id")
