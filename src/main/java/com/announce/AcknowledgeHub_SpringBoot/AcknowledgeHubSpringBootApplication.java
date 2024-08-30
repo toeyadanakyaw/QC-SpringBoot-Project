@@ -14,7 +14,7 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 @SpringBootApplication
 public class AcknowledgeHubSpringBootApplication {
 
-	private static final String BOT_TOKEN = "7099519419:AAHrVfHrwdDCSxK4gTyZVUhDDXhXGhgr8tA";
+	private static final String BOT_TOKEN = "7435469410:AAFPYQrOyybirQs8DjRhvBX2fFXf-PE4R34";
 	private static final String BOT_USERNAME = "AnnouncementBot";
 	private final UserRepository userRepository;
 	private final AnnouncementRepository announcementRepository;

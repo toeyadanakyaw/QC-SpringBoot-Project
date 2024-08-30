@@ -290,6 +290,7 @@ public class AnnouncementBotService extends TelegramLongPollingBot {
         sendDocument.setReplyMarkup(markup);
 
         Message messageObj = execute(sendDocument);
+        System.out.println(" Message messageObj = execute(sendDocument)"+messageObj);
         return messageObj.getMessageId();
     }
 }

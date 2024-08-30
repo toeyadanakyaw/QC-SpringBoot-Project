@@ -90,24 +90,6 @@ public class AnnouncementController {
                     .body("Announcement has already been sent.");
         }
 
-        // Send the announcement via Telegram bot and get the message ID
-        for (User recipient : selectedStaff) {
-            Long chatId = recipient.getTelegram_user_id();
-            byte[] fileBytes = file.getBytes();
-            int messageId = announcementBotService.sendAnnouncementWithPDF(chatId, createdAnnouncement, fileBytes);
-
-            // Update the AnnouncementReadStatus with the message ID and set as not read
-            AnnouncementReadStatus readStatus = announcementUsers.stream()
-                    .filter(status -> status.getStaff().equals(recipient))
-                    .findFirst()
-                    .orElse(null);
-            if (readStatus != null) {
-                readStatus.setMessageId(messageId);
-                readStatus.setIsRead(false); // Initially, the announcement is not read
-                announcementReadStatusRepository.save(readStatus);
-            }
-        }
-
         // Filter and notify only after the announcement has been sent
         List<User> recipients = selectedStaff.stream()
                 .filter(staff -> staff.getAcceptedAnnouncements().contains(createdAnnouncement))

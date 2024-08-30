@@ -4,6 +4,7 @@ import com.announce.AcknowledgeHub_SpringBoot.entity.Announcement;
 import com.announce.AcknowledgeHub_SpringBoot.entity.AnnouncementReadStatus;
 import com.announce.AcknowledgeHub_SpringBoot.entity.Group;
 import com.announce.AcknowledgeHub_SpringBoot.entity.User;
+import com.announce.AcknowledgeHub_SpringBoot.repository.AnnouncementReadStatusRepository;
 import com.announce.AcknowledgeHub_SpringBoot.repository.AnnouncementRepository;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
@@ -36,6 +37,7 @@ public class AnnouncementService {
     private final StaffService staffService;
     private final Cloudinary cloudinary;
     private final String folderName = "YNWA";
+    private final AnnouncementReadStatusRepository announcementReadStatusRepository;
 
     @Autowired
     public AnnouncementService(
@@ -44,7 +46,7 @@ public class AnnouncementService {
             AnnouncementSchedulerService announcementSchedulerService,
             EmailService emailService,
             StaffService staffService,
-            Cloudinary cloudinary
+            Cloudinary cloudinary, AnnouncementReadStatusRepository announcementReadStatusRepository
     ) {
         this.announcementBotService = announcementBotService;
         this.announcementRepository = announcementRepository;
@@ -52,6 +54,7 @@ public class AnnouncementService {
         this.emailService = emailService;
         this.staffService = staffService;
         this.cloudinary = cloudinary;
+        this.announcementReadStatusRepository = announcementReadStatusRepository;
     }
 
     public Announcement createAnnouncement(Announcement announcement, MultipartFile file, boolean overwrite) throws IOException {
@@ -108,10 +111,15 @@ public class AnnouncementService {
         return true;
     }
 
+
     @Transactional
     protected void sendAnnouncementImmediately(Integer announcementId) throws MessagingException, IOException, TelegramApiException {
         Announcement announcement = announcementRepository.findById(Long.valueOf(announcementId))
                 .orElseThrow(() -> new RuntimeException("Announcement not found"));
+        // Add a check here to avoid sending twice
+        if (announcement.getSent() == 1) {
+            return; // Exit if already sent
+        }
 
         String cloudUrl = announcement.getCloudUrl();
         if (cloudUrl == null || cloudUrl.isEmpty()) {
@@ -147,7 +155,17 @@ public class AnnouncementService {
                 emailService.sendEmailWithAttachment(email, announcement.getTitle(), announcement.getContent(), fileBytes, fileName);
             }
             for (Long tuid : telegramUserIds) {
-                announcementBotService.sendAnnouncementWithPDF(tuid, announcement, fileBytes);
+                int messageId = announcementBotService.sendAnnouncementWithPDF(tuid, announcement, fileBytes);
+                // Update AnnouncementReadStatus with messageId
+                AnnouncementReadStatus readStatus = announcement.getStaffMembers().stream()
+                        .filter(status -> status.getStaff().getTelegram_user_id().equals(tuid))
+                        .findFirst()
+                        .orElse(null);
+                if (readStatus != null) {
+                    readStatus.setMessageId(messageId);
+                    readStatus.setIsRead(false);
+                    announcementReadStatusRepository.save(readStatus);
+                }
             }
             announcement.setSent(1);
             announcementRepository.save(announcement);
@@ -223,6 +241,8 @@ public class AnnouncementService {
 
     private byte[] downloadFromUrl(String url) throws IOException {
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        connection.setConnectTimeout(15000);  // Set connection timeout to 15 seconds
+        connection.setReadTimeout(15000);  // Set read timeout to 15 seconds
         connection.setRequestMethod("GET");
 
         int responseCode = connection.getResponseCode();
@@ -241,5 +261,6 @@ public class AnnouncementService {
         } finally {
             connection.disconnect();
         }
+
     }
 }
