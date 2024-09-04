@@ -4,6 +4,7 @@ import com.announce.AcknowledgeHub_SpringBoot.repository.AnnouncementReadStatusR
 import com.announce.AcknowledgeHub_SpringBoot.repository.AnnouncementRepository;
 import com.announce.AcknowledgeHub_SpringBoot.repository.UserRepository;
 import com.announce.AcknowledgeHub_SpringBoot.service.AnnouncementBotService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -14,19 +15,24 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 @SpringBootApplication
 public class AcknowledgeHubSpringBootApplication {
 
-	private static final String BOT_TOKEN = "7423927099:AAGJmMp5ps8DBSsepams9rYsi19w-mw6aJw";
-	private static final String BOT_USERNAME = "AnnouncementBot";
+
+	@Value("${telegram.bot.token}")
+	private String botToken;
+
+	@Value("${telegram.bot.username}")
+	private String botUsername;
+
 	private final UserRepository userRepository;
 	private final AnnouncementRepository announcementRepository;	
 	private final AnnouncementReadStatusRepository announcementReadStatusRepository;
 
-    public AcknowledgeHubSpringBootApplication(UserRepository userRepository, AnnouncementRepository announcementRepository, AnnouncementReadStatusRepository announcementReadStatusRepository) {
-        this.userRepository = userRepository;
-        this.announcementRepository = announcementRepository;
-        this.announcementReadStatusRepository = announcementReadStatusRepository;
-    }
+	public AcknowledgeHubSpringBootApplication(UserRepository userRepository, AnnouncementRepository announcementRepository, AnnouncementReadStatusRepository announcementReadStatusRepository) {
+		this.userRepository = userRepository;
+		this.announcementRepository = announcementRepository;
+		this.announcementReadStatusRepository = announcementReadStatusRepository;
+	}
 
-    public static void main(String[] args) {
+	public static void main(String[] args) {
 		SpringApplication.run(AcknowledgeHubSpringBootApplication.class, args);
 	}
 
@@ -36,7 +42,7 @@ public class AcknowledgeHubSpringBootApplication {
 		TelegramBotsApi telegramBotsApi = new TelegramBotsApi(DefaultBotSession.class);
 
 		// Create an instance of your bot service
-		AnnouncementBotService bot = new AnnouncementBotService(BOT_TOKEN, BOT_USERNAME, userRepository, announcementRepository, announcementReadStatusRepository);
+		AnnouncementBotService bot = new AnnouncementBotService(botToken, botUsername, userRepository, announcementRepository, announcementReadStatusRepository);
 
 		// Register the bot with the Telegram Bots API
 		telegramBotsApi.registerBot(bot);
@@ -44,5 +50,4 @@ public class AcknowledgeHubSpringBootApplication {
 		// Return the bot service instance
 		return bot;
 	}
-
 }
