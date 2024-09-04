@@ -16,17 +16,17 @@ import java.util.List;
 @RequestMapping("api/group")
 public class GroupController {
 
-    @Autowired
-    GroupService groupService;
+    private final GroupService groupService;
 
-    @Autowired
-    UserRepository userRepository;
+    private final UserRepository userRepository;
 
     private final GroupRepository groupRepository;
 
     @Autowired
-    public GroupController(GroupRepository groupRepository){
+    public GroupController(GroupRepository groupRepository, UserRepository userRepository, GroupService groupService){
         this.groupRepository = groupRepository;
+        this.userRepository = userRepository;
+        this.groupService = groupService;
     }
 
     @GetMapping("/staff")
@@ -44,8 +44,14 @@ public class GroupController {
         return groupService.addStaffToGroup(groupId, staffIds);
     }
 
+//    @GetMapping("/getAllGroup")
+//    public List<Group> getAllGroup(@PathVariable String id) {
+//        return groupRepository.findAll();
+//    }
     @GetMapping("/getAllGroup")
-    public List<Group> getAllGroup() {
-        return groupRepository.findAll();
+    public List<Group> getAllGroup(@RequestParam String role,  @RequestParam(required = false) String userId ) {
+        System.out.println("Group is here!!");
+        System.out.println("Group userId:"+userId);
+        return groupService.getAllGroup(role, userId);
     }
 }

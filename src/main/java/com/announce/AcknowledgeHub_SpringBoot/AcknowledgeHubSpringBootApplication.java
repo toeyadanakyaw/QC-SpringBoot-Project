@@ -15,6 +15,7 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 @SpringBootApplication
 public class AcknowledgeHubSpringBootApplication {
 
+
 	@Value("${telegram.bot.token}")
 	private String botToken;
 
@@ -22,7 +23,7 @@ public class AcknowledgeHubSpringBootApplication {
 	private String botUsername;
 
 	private final UserRepository userRepository;
-	private final AnnouncementRepository announcementRepository;
+	private final AnnouncementRepository announcementRepository;	
 	private final AnnouncementReadStatusRepository announcementReadStatusRepository;
 
 	public AcknowledgeHubSpringBootApplication(UserRepository userRepository, AnnouncementRepository announcementRepository, AnnouncementReadStatusRepository announcementReadStatusRepository) {

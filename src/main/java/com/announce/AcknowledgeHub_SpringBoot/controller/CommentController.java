@@ -69,5 +69,4 @@ public class CommentController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build(); // Return 404 if the comment is not found
         }
     }
-
 }

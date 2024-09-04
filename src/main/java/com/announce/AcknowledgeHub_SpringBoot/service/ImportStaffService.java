@@ -1,14 +1,8 @@
 package com.announce.AcknowledgeHub_SpringBoot.service;
 
-import com.announce.AcknowledgeHub_SpringBoot.entity.Company;
-import com.announce.AcknowledgeHub_SpringBoot.entity.Department;
-import com.announce.AcknowledgeHub_SpringBoot.entity.Group;
-import com.announce.AcknowledgeHub_SpringBoot.entity.User;
+import com.announce.AcknowledgeHub_SpringBoot.entity.*;
 import com.announce.AcknowledgeHub_SpringBoot.model.Role;
-import com.announce.AcknowledgeHub_SpringBoot.repository.CompanyRepository;
-import com.announce.AcknowledgeHub_SpringBoot.repository.DepartmentRepository;
-import com.announce.AcknowledgeHub_SpringBoot.repository.GroupRepository;
-import com.announce.AcknowledgeHub_SpringBoot.repository.UserRepository;
+import com.announce.AcknowledgeHub_SpringBoot.repository.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,6 +37,9 @@ public class ImportStaffService {
 
     @Autowired
     UserRepository userRepository;
+
+    @Autowired
+    PositionRepository positionRepository;
 
     private static final int CODE_LENGTH = 5;
 
@@ -83,21 +80,29 @@ public class ImportStaffService {
                 int cellIndex = 0;
                 String departmentName = null;
                 String companyName = null;
+                String positionName = null;
                 while (cellInRow.hasNext()) {
                     Cell currentCell = cellInRow.next();
 
                     switch (cellIndex) {
                         case 0:
-                            staff.setName(currentCell.getStringCellValue());
+                            if (currentCell.getCellType() == CellType.NUMERIC){
+                                staff.setStaff_id(String.valueOf((long) currentCell.getNumericCellValue()));
+                            } else if (currentCell.getCellType() == CellType.STRING) {
+                                staff.setStaff_id(currentCell.getStringCellValue());
+                            }
                             break;
                         case 1:
+                            staff.setName(currentCell.getStringCellValue());
+                            break;
+                        case 2:
                             staff.setEmail(currentCell.getStringCellValue());
                             break;
 //                        case 2:
 ////                            staff.setPh_number(currentCell.getStringCellValue());
 //                            staff.setPh_number(String.valueOf((long) currentCell.getNumericCellValue()));
 //                            break;
-                        case 2:
+                        case 3:
                             if (currentCell.getCellType() == CellType.NUMERIC) {
                                 // Convert numeric value to a string
                                 staff.setPh_number(String.valueOf((long) currentCell.getNumericCellValue()));
@@ -115,20 +120,37 @@ public class ImportStaffService {
 //                            }
 //                            break;
 //                        }
-                        case 3: {
+//                        case 4:
+//                            staff.setPosition(currentCell.getStringCellValue());
+//                            break;
+                        case 4:
+                            positionName = getCellStringValue(currentCell);
+                            break;
+                        case 5:
+                            departmentName = getCellStringValue(currentCell).trim();
+                            break;
+                        case 6:
+                            companyName = getCellStringValue(currentCell).trim();
+                            break;
+                        case 7: {
                             String roleName = getCellStringValue(currentCell).trim(); // Trim whitespace
+                            // Normalize the role name by replacing spaces with underscores
+                            roleName = roleName.replace(" ", "_").toUpperCase();
+                            if (!isValidRole(roleName)) {
+                                roleName = addUnderscoreToRoleName(roleName);
+                            }
                             try {
                                 // Use the correct Role enum
-                                staff.setRole(Role.valueOf(roleName.toUpperCase()));
+                                staff.setRole(Role.valueOf(roleName));//.toUpperCase()));
                             } catch (IllegalArgumentException e) {
                                 throw new IllegalArgumentException("Invalid role: " + roleName);
                             }
                             break;
                         }
 
-                        case 4:
-                            staff.setStatus(currentCell.getBooleanCellValue());
-                            break;
+//                        case 8:
+//                            staff.setStatus(currentCell.getBooleanCellValue());
+//                            break;
 //                        case 5:
 //                            staff.setDepartment_name(currentCell.getStringCellValue());
 //                            break;
@@ -150,17 +172,19 @@ public class ImportStaffService {
 //                            Company company = getOrCreateCompany(companyName);
 //                            staff.setDepartment.Company.Name(company);
 //                            break;
-                        case 5:
-                            departmentName = getCellStringValue(currentCell).trim();
-                            break;
-                        case 6:
-                            companyName = getCellStringValue(currentCell).trim();
-                            break;
+//                        case 5:
+//                            departmentName = getCellStringValue(currentCell).trim();
+//                            break;
+//                        case 6:
+//                            companyName = getCellStringValue(currentCell).trim();
+//                            break;
                         default:
                             throw new IllegalStateException("Unexpected value: " + cellIndex);
                     }
                     cellIndex++;
                 }
+
+                staff.setStatus(true);
 
                 //Generate and set registration code
                 staff.setRegistration_code(generateRegistrationCode());
@@ -183,6 +207,12 @@ public class ImportStaffService {
                     staff.setCompany(company);
                 }
 
+                if (positionName != null) {
+                    Position position = getOrCreatePosition(positionName);
+                    staff.setPosition(position);
+                }
+
+
                 // validate blank or space
                 validateStaffRow(staff, rowNumber);
 
@@ -201,6 +231,15 @@ public class ImportStaffService {
 //            staffRepository.saveAll(staffs);
             //for user table
             userRepository.saveAll(staffs);
+        }
+    }
+
+    private Position getOrCreatePosition(String positionName) {
+        Optional<Position> existingPosition = positionRepository.findByNameIgnoreCase(positionName);
+        if (existingPosition.isPresent()) {
+            return existingPosition.get();
+        } else {
+            throw new IllegalArgumentException("Position not found: " + positionName);
         }
     }
 
@@ -304,6 +343,28 @@ public class ImportStaffService {
         // Generate and set registration code
         user.setRegistration_code(generateRegistrationCode());
     }
+
+    // Method to check if a role name is valid
+    private boolean isValidRole(String roleName) {
+        try {
+            Role.valueOf(roleName);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    // Method to insert underscores in common positions for role names
+    private String addUnderscoreToRoleName(String roleName) {
+        if (roleName.equals("MAINHR")) {
+            return "MAIN_HR";
+        } else if (roleName.equals("SUBHR")) {
+            return "SUB_HR";
+        }
+        // Add more conditions as needed for other roles
+        return roleName;
+    }
+
 }
 
 

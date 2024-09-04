@@ -11,5 +11,4 @@ public interface CommentRepository extends JpaRepository<Comment, Integer> {
 
     @Query("SELECT c FROM Comment c LEFT JOIN FETCH c.replies WHERE c.announcement.id = :announcementId AND c.parentComment IS NULL")
     List<Comment> findByAnnouncementIdAndParentCommentIsNull(int announcementId);
-
 }

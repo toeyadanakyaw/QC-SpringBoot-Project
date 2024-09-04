@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.mail.MessagingException;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -34,6 +36,7 @@ public class AnnouncementService {
     private final StaffService staffService;
     private final Cloudinary cloudinary;
     private final String folderName = "YNWA";
+    private final AnnouncementReadStatusRepository announcementReadStatusRepository;
 
     @Autowired
     public AnnouncementService(
@@ -42,7 +45,7 @@ public class AnnouncementService {
             AnnouncementSchedulerService announcementSchedulerService, AnnouncementReadStatusRepository announcementReadStatusRepository,
             EmailService emailService,
             StaffService staffService,
-            Cloudinary cloudinary
+            Cloudinary cloudinary, AnnouncementReadStatusRepository announcementReadStatusRepository
     ) {
         this.announcementBotService = announcementBotService;
         this.announcementRepository = announcementRepository;
@@ -51,6 +54,7 @@ public class AnnouncementService {
         this.emailService = emailService;
         this.staffService = staffService;
         this.cloudinary = cloudinary;
+        this.announcementReadStatusRepository = announcementReadStatusRepository;
     }
 
 
@@ -100,7 +104,7 @@ public class AnnouncementService {
         return announcementRepository.save(announcement);
     }
 
-    public boolean sendAnnouncement(Integer announcementId) throws MessagingException, IOException {
+    public boolean sendAnnouncement(Integer announcementId) throws MessagingException, IOException, TelegramApiException {
         Announcement announcement = announcementRepository.findById(Long.valueOf(announcementId))
                 .orElseThrow(() -> new RuntimeException("Announcement not found"));
 
@@ -127,10 +131,15 @@ public class AnnouncementService {
         return true;
     }
 
+
     @Transactional
-    protected void sendAnnouncementImmediately(Integer announcementId) throws MessagingException, IOException {
+    protected void sendAnnouncementImmediately(Integer announcementId) throws MessagingException, IOException, TelegramApiException {
         Announcement announcement = announcementRepository.findById(Long.valueOf(announcementId))
                 .orElseThrow(() -> new RuntimeException("Announcement not found"));
+        // Add a check here to avoid sending twice
+        if (announcement.getSent() == 1) {
+            return; // Exit if already sent
+        }
 
         String cloudUrl = announcement.getCloudUrl();
         if (cloudUrl == null || cloudUrl.isEmpty()) {
@@ -153,7 +162,8 @@ public class AnnouncementService {
             telegramUserIds.addAll(staffService.getTelegramUserIdByGroupId(group.getId()));
         }
 
-        for (User staff : announcement.getStaffMembers()) {
+        for (AnnouncementReadStatus user : announcement.getStaffMembers()) {
+            User staff = user.getStaff();
             emailAddresses.add(staff.getEmail());
             telegramUserIds.add(staff.getTelegram_user_id());
         }
@@ -165,7 +175,17 @@ public class AnnouncementService {
                 emailService.sendEmailWithAttachment(email, announcement.getTitle(), announcement.getContent(), fileBytes, fileName);
             }
             for (Long tuid : telegramUserIds) {
-                announcementBotService.sendAnnouncementWithPDF(tuid, announcement.getTitle(), announcement.getContent(), fileBytes, fileName, announcement.getUser(), announcementId);
+                int messageId = announcementBotService.sendAnnouncementWithPDF(tuid, announcement, fileBytes);
+                // Update AnnouncementReadStatus with messageId
+                AnnouncementReadStatus readStatus = announcement.getStaffMembers().stream()
+                        .filter(status -> status.getStaff().getTelegram_user_id().equals(tuid))
+                        .findFirst()
+                        .orElse(null);
+                if (readStatus != null) {
+                    readStatus.setMessageId(messageId);
+                    readStatus.setIsRead(false);
+                    announcementReadStatusRepository.save(readStatus);
+                }
             }
             announcement.setSent(1);
             announcementRepository.save(announcement);
@@ -241,6 +261,8 @@ public class AnnouncementService {
 
     private byte[] downloadFromUrl(String url) throws IOException {
         HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        connection.setConnectTimeout(15000);  // Set connection timeout to 15 seconds
+        connection.setReadTimeout(15000);  // Set read timeout to 15 seconds
         connection.setRequestMethod("GET");
 
         int responseCode = connection.getResponseCode();
@@ -259,6 +281,7 @@ public class AnnouncementService {
         } finally {
             connection.disconnect();
         }
+
     }
 
     public Map<String, Object> getAnnouncementDetails(int announcementId) {

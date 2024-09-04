@@ -13,18 +13,14 @@ public class CommentService {
     @Autowired
     private CommentRepository commentRepository;
 
-//    public List<Comment> getCommentsByAnnouncementId(int announcementId) {
-//        return commentRepository.findByAnnouncementId(announcementId);
-//    }
-
     public List<Comment> getCommentsByAnnouncementId(int announcementId) {
         return commentRepository.findByAnnouncementIdAndParentCommentIsNull(announcementId);
+
     }
 
     public Comment addComment(Comment comment) {
         return commentRepository.save(comment);
     }
-
     public Comment getCommentById(int id) {
         return commentRepository.findById(id).orElseThrow(() -> new RuntimeException("Comment not found"));
     }
