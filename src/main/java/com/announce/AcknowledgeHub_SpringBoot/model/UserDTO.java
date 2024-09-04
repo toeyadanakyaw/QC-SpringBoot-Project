@@ -1,5 +1,6 @@
 package com.announce.AcknowledgeHub_SpringBoot.model;
 
+import com.announce.AcknowledgeHub_SpringBoot.entity.Company;
 import lombok.Data;
 
 @Data
@@ -12,5 +13,7 @@ public class UserDTO {
     private byte[] photo;
     private Role role;
     private boolean state;
+    private String ph_number;
+    private Company company;
 
 }

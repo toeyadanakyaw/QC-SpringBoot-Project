@@ -20,7 +20,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -36,15 +35,26 @@ import java.util.stream.Collectors;
 @CrossOrigin(origins = "http://localhost:4200")
 public class AnnouncementController {
 
-    @Autowired
-    private ModelMapper mapper;
 
-    @Autowired
-    private AnnouncementService announcementService;
+    private final ModelMapper mapper;
+    private final AnnouncementService announcementService;
+    private final StaffService staffService;
+    private final UserRepository userRepository;
+    private final NotificationRepo notificationRepo;
+    private final SimpMessagingTemplate simpMessagingTemplate;
+    private final AnnouncementBotService announcementBotService;
+    private final AnnouncementReadStatusRepository announcementReadStatusRepository;
 
-    @Autowired
-    private StaffService staffService;
-
+    public AnnouncementController(ModelMapper mapper, AnnouncementService announcementService, StaffService staffService, UserRepository userRepository, NotificationRepo notificationRepo, SimpMessagingTemplate simpMessagingTemplate, AnnouncementBotService announcementBotService, AnnouncementReadStatusRepository announcementReadStatusRepository) {
+        this.mapper = mapper;
+        this.announcementService = announcementService;
+        this.staffService = staffService;
+        this.userRepository = userRepository;
+        this.notificationRepo = notificationRepo;
+        this.simpMessagingTemplate = simpMessagingTemplate;
+        this.announcementBotService = announcementBotService;
+        this.announcementReadStatusRepository = announcementReadStatusRepository;
+    }
     @Autowired
     private UserRepository userRepository;
 
@@ -89,7 +99,16 @@ public class AnnouncementController {
 
         announcementEntity.setDocumentName(file.getOriginalFilename());
         announcementEntity.setGroups(selectedGroups);
-        announcementEntity.setStaffMembers(selectedStaff);
+        List<AnnouncementReadStatus> announcementUsers = selectedStaff.stream()
+                .map(temp -> {
+                    AnnouncementReadStatus staff = new AnnouncementReadStatus();
+                    staff.setAnnouncement(announcementEntity);
+                    staff.setStaff(temp);
+                    // Set additional columns if needed
+                    return staff;
+                })
+                .toList();
+        announcementEntity.setStaffMembers(announcementUsers);
         announcementEntity.setUser(user);
 
         Announcement createdAnnouncement = announcementService.createAnnouncement(announcementEntity, file, false);
@@ -176,6 +195,8 @@ public class AnnouncementController {
             default:
                 return MediaType.APPLICATION_OCTET_STREAM;
         }
+        return ResponseEntity.status(HttpStatus.OK)
+                .body("Cancelled the schedule for announcement ID " + id + " successfully.");
     }
 
 
@@ -220,6 +241,6 @@ public class AnnouncementController {
 //                .body("Cancelled the schedule for announcement ID " + id + " successfully.");
 //    }
 
-    
+
 
 }

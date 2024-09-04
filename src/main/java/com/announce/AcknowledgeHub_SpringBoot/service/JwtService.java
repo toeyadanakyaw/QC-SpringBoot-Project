@@ -58,12 +58,18 @@ public class JwtService {
 
     public String generateToken(User user){
         String role = user.getRole().name();
+        Integer companyId = user.getCompany() != null ? user.getCompany().getId() : null;
+        Integer departmentId = user.getDepartment() != null ? user.getDepartment().getId() : null;
+        String position = user.getPosition() != null ? user.getPosition().getName() : null;
         String token = Jwts
                 .builder()
                 .subject(user.getEmail())
                 .claim("role",role)
                 .claim("userId",user.getId())
                 .claim("status",user.isStatus())
+                .claim("companyId",companyId)
+                .claim("departmentId",departmentId)
+                .claim("position",position)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis()+  24*60*60*1000))
                 .signWith(getSigninKey())

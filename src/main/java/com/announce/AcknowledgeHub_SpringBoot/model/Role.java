@@ -7,6 +7,8 @@ public enum Role {
 //    User
 
     MAIN_HR,
-    USER //
+    SUB_HR,
+    MANAGEMENT,
+    USER
 
 }
