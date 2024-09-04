@@ -20,6 +20,8 @@ public class Group {
     private int id;
     @Column(name = "name")
     private String name;
+    @Column(name = "create_by")
+    private String createBy;
 
     @ManyToMany
     @JoinTable(

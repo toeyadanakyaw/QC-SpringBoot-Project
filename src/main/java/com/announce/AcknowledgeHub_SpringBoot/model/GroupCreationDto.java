@@ -9,4 +9,5 @@ public class GroupCreationDto {
 
     private String groupName;
     private List<Integer> staffIds;
+    private String createBy;
 }
