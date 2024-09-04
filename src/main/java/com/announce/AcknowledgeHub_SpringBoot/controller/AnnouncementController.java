@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -53,6 +54,23 @@ public class AnnouncementController {
     @Autowired
     private SimpMessagingTemplate simpMessagingTemplate;
 
+
+    @GetMapping
+    public ResponseEntity<List<Announcement>> getAllAnnouncements() {
+        List<Announcement> announcements = announcementService.getAllAnnouncements();
+        return ResponseEntity.ok(announcements);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<?> getAnnouncementDetails(@PathVariable("id") int id) {
+        Map<String, Object> details = announcementService.getAnnouncementDetails(id);
+
+        if (details == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        return ResponseEntity.ok(details);
+    }
 
 
     @PostMapping(consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
@@ -101,49 +119,107 @@ public class AnnouncementController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body("Announcement has been created and sent to targeted recipients");
     }
-
-
-    @GetMapping
-    public ResponseEntity<List<AnnouncementDTO>>getAnnouncements(){
-        List<Announcement>announcementEntities=announcementService.getAnnouncements();
-        if(!announcementEntities.isEmpty()){
-            List<AnnouncementDTO> dtos=announcementEntities.stream()
-                    .map(announcements -> mapper.map(announcements, AnnouncementDTO.class))
-                    .toList();
-            return new ResponseEntity<>(dtos,HttpStatus.OK);
+    @GetMapping("/download")
+    public ResponseEntity<byte[]> downloadAnnouncementFile(@RequestParam("id") Long id) throws IOException {
+        Announcement announcement = announcementService.getAnnouncementById(id);
+        if (announcement == null || announcement.getCloudUrl() == null) {
+            return ResponseEntity.notFound().build();
         }
-        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+
+        byte[] fileBytes = announcementService.downloadFile(announcement.getCloudUrl());
+        String fileName = announcement.getDocumentName();
+
+        // Determine the media type based on the file extension
+        MediaType mediaType = getMediaTypeForFileName(fileName);
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header("Content-Disposition", "attachment; filename=\"" + fileName + "\"")
+                .body(fileBytes);
     }
 
-    @PutMapping("{id}/re-schedule")
-    public ResponseEntity<?> reScheduleAnnouncement(@PathVariable int id, @RequestPart(value = "file", required = false) MultipartFile file,
-                                                    @RequestPart("data") String data) throws JsonProcessingException{
+    private MediaType getMediaTypeForFileName(String fileName) {
+        String extension = StringUtils.getFilenameExtension(fileName);
 
-        ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.registerModule(new JavaTimeModule()); // Register the JavaTimeModule
-        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        AnnouncementDTO dto = objectMapper.readValue(data, AnnouncementDTO.class);
-
-        boolean isUpdated = announcementService.updateScheduledAnnouncement(id, dto.getScheduledDate());
-        if(!isUpdated){
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body("Cannot reschedule an announcement that has already been sent");
+        if (extension == null) {
+            return MediaType.APPLICATION_OCTET_STREAM;
         }
-        return ResponseEntity.status(HttpStatus.OK)
-                .body("Rescheduled the announcement successfully");
+
+        switch (extension.toLowerCase()) {
+            case "pdf":
+                return MediaType.APPLICATION_PDF;
+            case "jpg":
+            case "jpeg":
+            case "png":
+            case "gif":
+            case "bmp":
+                return MediaType.IMAGE_JPEG;
+            case "mp4":
+            case "avi":
+            case "mov":
+            case "wmv":
+                return MediaType.valueOf("video/mp4");
+            case "mp3":
+            case "wav":
+                return MediaType.valueOf("audio/mpeg");
+            case "zip":
+                return MediaType.valueOf("application/zip");
+            case "xlsx":
+            case "xls":
+                return MediaType.valueOf("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            case "doc":
+            case "docx":
+                return MediaType.valueOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+            case "ppt":
+            case "pptx":
+                return MediaType.valueOf("application/vnd.openxmlformats-officedocument.presentationml.presentation");
+            default:
+                return MediaType.APPLICATION_OCTET_STREAM;
+        }
     }
 
-    @PutMapping("{id}/cancel-schedule")
-    public ResponseEntity<?> cancelScheduleAnnouncement(@PathVariable int id) {
-        boolean isCancelled = announcementService.cancelScheduledAnnouncement(id);
-        if(!isCancelled){
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body("Cannot cancel a scheduled announcement that has already been sent");
-        }
-        return ResponseEntity.status(HttpStatus.OK)
-                .body("Cancelled the schedule for announcement ID " + id + " successfully.");
-    }
 
+//    @GetMapping
+//    public ResponseEntity<List<AnnouncementDTO>>getAnnouncements(){
+//        List<Announcement>announcementEntities=announcementService.getAnnouncements();
+//        if(!announcementEntities.isEmpty()){
+//            List<AnnouncementDTO> dtos=announcementEntities.stream()
+//                    .map(announcements -> mapper.map(announcements, AnnouncementDTO.class))
+//                    .toList();
+//            return new ResponseEntity<>(dtos,HttpStatus.OK);
+//        }
+//        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
+//    }
 
+//    @PutMapping("{id}/re-schedule")
+//    public ResponseEntity<?> reScheduleAnnouncement(@PathVariable int id, @RequestPart(value = "file", required = false) MultipartFile file,
+//                                                    @RequestPart("data") String data) throws JsonProcessingException{
+//
+//        ObjectMapper objectMapper = new ObjectMapper();
+//        objectMapper.registerModule(new JavaTimeModule()); // Register the JavaTimeModule
+//        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+//        AnnouncementDTO dto = objectMapper.readValue(data, AnnouncementDTO.class);
+//
+//        boolean isUpdated = announcementService.updateScheduledAnnouncement(id, dto.getScheduledDate());
+//        if(!isUpdated){
+//            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+//                    .body("Cannot reschedule an announcement that has already been sent");
+//        }
+//        return ResponseEntity.status(HttpStatus.OK)
+//                .body("Rescheduled the announcement successfully");
+//    }
+//
+//    @PutMapping("{id}/cancel-schedule")
+//    public ResponseEntity<?> cancelScheduleAnnouncement(@PathVariable int id) {
+//        boolean isCancelled = announcementService.cancelScheduledAnnouncement(id);
+//        if(!isCancelled){
+//            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+//                    .body("Cannot cancel a scheduled announcement that has already been sent");
+//        }
+//        return ResponseEntity.status(HttpStatus.OK)
+//                .body("Cancelled the schedule for announcement ID " + id + " successfully.");
+//    }
+
+    
 
 }

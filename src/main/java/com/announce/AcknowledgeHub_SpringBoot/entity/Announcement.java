@@ -4,8 +4,6 @@ import jakarta.persistence.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
-import java.time.ZonedDateTime;
-import java.util.Date;
 import java.util.List;
 
 @Data
@@ -25,11 +23,6 @@ public class Announcement {
 
      @Column(name = "created_at", updatable = false, nullable = false)
      private LocalDateTime createdAt;
-
-     @PrePersist
-     protected void onCreate() {
-          this.createdAt = LocalDateTime.now();
-     }
 
      @Lob
      @Column(name = "document")
@@ -75,4 +68,16 @@ public class Announcement {
      @ManyToOne
      @JoinColumn(name = "user_id")
      private User user;
+
+     // Transient field for read progress
+     @Transient
+     private double readProgress;
+
+     // Automatically set the createdAt field before persisting to the database
+     @PrePersist
+     protected void onCreate() {
+          this.createdAt = LocalDateTime.now();
+     }
+
+
 }

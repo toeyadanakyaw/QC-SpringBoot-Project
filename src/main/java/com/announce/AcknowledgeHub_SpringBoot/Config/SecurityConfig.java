@@ -20,6 +20,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
+import org.springframework.web.servlet.config.annotation.CorsRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 @EnableWebSecurity
@@ -38,7 +40,7 @@ public class SecurityConfig {
                     .csrf(AbstractHttpConfigurer::disable)
                     .authorizeHttpRequests(
                             req-> req
-                                    .requestMatchers( "api/user/login","api/user/register","/category/getAll","/api/announcements/create","/api/announcements/publish","/ws/**","/api/**").permitAll()
+                                    .requestMatchers( "api/user/login","api/user/register","/category/getAll","/api/announcements/**","/api/announcements/publish","/ws/**","/api/**").permitAll()
                                     .requestMatchers("category/create").hasRole("admin")
                                     .anyRequest()
                                     .authenticated()

@@ -1,8 +1,10 @@
 package com.announce.AcknowledgeHub_SpringBoot.service;
 
 import com.announce.AcknowledgeHub_SpringBoot.entity.Announcement;
+import com.announce.AcknowledgeHub_SpringBoot.entity.AnnouncementReadStatus;
 import com.announce.AcknowledgeHub_SpringBoot.entity.Group;
 import com.announce.AcknowledgeHub_SpringBoot.entity.User;
+import com.announce.AcknowledgeHub_SpringBoot.repository.AnnouncementReadStatusRepository;
 import com.announce.AcknowledgeHub_SpringBoot.repository.AnnouncementRepository;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
@@ -18,10 +20,8 @@ import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class AnnouncementService {
@@ -29,6 +29,7 @@ public class AnnouncementService {
     private final AnnouncementBotService announcementBotService;
     private final AnnouncementRepository announcementRepository;
     private final AnnouncementSchedulerService announcementSchedulerService;
+    private final AnnouncementReadStatusRepository announcementReadStatusRepository;
     private final EmailService emailService;
     private final StaffService staffService;
     private final Cloudinary cloudinary;
@@ -38,7 +39,7 @@ public class AnnouncementService {
     public AnnouncementService(
             AnnouncementBotService announcementBotService,
             AnnouncementRepository announcementRepository,
-            AnnouncementSchedulerService announcementSchedulerService,
+            AnnouncementSchedulerService announcementSchedulerService, AnnouncementReadStatusRepository announcementReadStatusRepository,
             EmailService emailService,
             StaffService staffService,
             Cloudinary cloudinary
@@ -46,9 +47,30 @@ public class AnnouncementService {
         this.announcementBotService = announcementBotService;
         this.announcementRepository = announcementRepository;
         this.announcementSchedulerService = announcementSchedulerService;
+        this.announcementReadStatusRepository = announcementReadStatusRepository;
         this.emailService = emailService;
         this.staffService = staffService;
         this.cloudinary = cloudinary;
+    }
+
+
+    public List<Announcement> getAllAnnouncements() {
+        List<Announcement> announcements = announcementRepository.findAll();
+        return announcements.stream().map(announcement -> {
+            // Get the total number of users the announcement was sent to
+            int totalRecipients = announcementReadStatusRepository.countByAnnouncement(announcement);
+
+            // Get the number of users who have read the announcement
+            int readCount = announcementReadStatusRepository.countByAnnouncementAndIsReadTrue(announcement);
+
+            // Calculate the read progress percentage
+            double readProgress = totalRecipients > 0 ? (readCount * 100.0 / totalRecipients) : 0.0;
+
+            // Set the read progress on the Announcement entity
+            announcement.setReadProgress(readProgress);
+
+            return announcement;
+        }).collect(Collectors.toList());
     }
 
     public Announcement createAnnouncement(Announcement announcement, MultipartFile file, boolean overwrite) throws IOException {
@@ -236,6 +258,39 @@ public class AnnouncementService {
             return out.toByteArray();
         } finally {
             connection.disconnect();
+        }
+    }
+
+    public Map<String, Object> getAnnouncementDetails(int announcementId) {
+        Optional<Announcement> announcement = announcementRepository.findById((long) announcementId);
+        if (announcement.isEmpty()) {
+            return null; // Handle the case where the announcement is not found
+        }
+
+        List<AnnouncementReadStatus> readStatuses = announcementReadStatusRepository.findByAnnouncementId(announcementId);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("announcement", announcement.get());
+        result.put("readStatuses", readStatuses);
+
+        return result;
+    }
+    public Announcement getAnnouncementById(Long id) {
+        return announcementRepository.findById(id).orElse(null);
+    }
+    public byte[] downloadFile(String cloudUrl) throws IOException {
+        URL url = new URL(cloudUrl);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("GET");
+
+        try (InputStream inputStream = connection.getInputStream();
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            return outputStream.toByteArray();
         }
     }
 }
