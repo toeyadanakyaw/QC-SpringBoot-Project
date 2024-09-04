@@ -21,6 +21,9 @@ public class User implements UserDetails {
     @Column(name = "id")
     private int id;
 
+    @Column(name = "staff_id")
+    private String staff_id;
+
     @Column(name = "name")
     private String name;
 
@@ -32,6 +35,9 @@ public class User implements UserDetails {
 
     @Column(name = "ph_number")
     private String ph_number;
+
+//    @Column(name = "position")
+//    private String position;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false)
@@ -60,6 +66,10 @@ public class User implements UserDetails {
 
     @Column(name = "fileExtension")
     private String fileExtension;
+
+    @ManyToOne
+    @JoinColumn(name = "position_id")
+    private Position position;
 
     @ManyToOne
     @JoinColumn(name = "department_id")

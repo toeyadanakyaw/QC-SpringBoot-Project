@@ -43,6 +43,12 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     List<User> findByDepartmentIdAndCompanyId(int departmentId, int companyId);
 
+    List<User> findAllByStatus(boolean status);
+
+    List<User> findByCompanyIdAndStatus(Integer companyId, boolean status);
+
+    List<User> findByCompanyIdAndDepartmentIdAndStatus(Integer companyId, Integer departmentId, boolean status);
+
 
 
 

@@ -7,6 +7,9 @@ import com.announce.AcknowledgeHub_SpringBoot.model.GroupCreationDto;
 import com.announce.AcknowledgeHub_SpringBoot.repository.GroupRepository;
 import com.announce.AcknowledgeHub_SpringBoot.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,7 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 
 @Service
-@RequestMapping("/api/group")
+//@RequestMapping("/api/group")
 public class GroupService {
 
     @Autowired
@@ -35,7 +38,7 @@ public class GroupService {
     }
 
     @Transactional
-    @PostMapping("/create")
+    //@PostMapping("/create")
     public Group createGroup(GroupCreationDto groupCreationDto){
         String normalizedGroupName = groupCreationDto.getGroupName().replaceAll("\\s", "").toLowerCase();
 
@@ -77,11 +80,13 @@ public class GroupService {
 
             }
         }
+
         //for staff table
 //        group.setStaffs(staffs);
         //for user table
         group.setUsers(staffs);
 
+        group.setCreateBy(groupCreationDto.getCreateBy());
         // for one to many
 //        return group;
 
@@ -90,7 +95,7 @@ public class GroupService {
 
     }
 
-    @PostMapping("/add-staff")
+   // @PostMapping("/add-staff")
     public Group addStaffToGroup(int groupId, List<Integer> staffIds) {
 
         // Fetch the group by ID or throw an exception if not found
@@ -129,5 +134,27 @@ public class GroupService {
         // Return the updated group
         return group;
     }
+
+    public void deleteGroup(int id){
+        if(groupRepository.existsById(id)){
+            groupRepository.deleteById(id);
+        }else {
+            throw new RuntimeException("User not found");
+        }
+    }
+
+    public List<Group> getAllGroup(String role, String userId){
+        List<Group> groups;
+
+        if ("MAIN_HR".equals(role)) {
+            groups = groupRepository.findAll();
+        } else if(userId != null) {
+            groups = groupRepository.findGroupByUserId(userId);
+        } else {
+            throw new RuntimeException("Group is not available.");
+        }
+        return groups;
+    }
+
 
 }
