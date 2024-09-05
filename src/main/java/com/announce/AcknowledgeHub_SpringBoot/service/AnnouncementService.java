@@ -36,13 +36,12 @@ public class AnnouncementService {
     private final StaffService staffService;
     private final Cloudinary cloudinary;
     private final String folderName = "YNWA";
-    private final AnnouncementReadStatusRepository announcementReadStatusRepository;
 
     @Autowired
     public AnnouncementService(
             AnnouncementBotService announcementBotService,
             AnnouncementRepository announcementRepository,
-            AnnouncementSchedulerService announcementSchedulerService, AnnouncementReadStatusRepository announcementReadStatusRepository,
+            AnnouncementSchedulerService announcementSchedulerService,
             EmailService emailService,
             StaffService staffService,
             Cloudinary cloudinary, AnnouncementReadStatusRepository announcementReadStatusRepository
@@ -54,27 +53,6 @@ public class AnnouncementService {
         this.emailService = emailService;
         this.staffService = staffService;
         this.cloudinary = cloudinary;
-        this.announcementReadStatusRepository = announcementReadStatusRepository;
-    }
-
-
-    public List<Announcement> getAllAnnouncements() {
-        List<Announcement> announcements = announcementRepository.findAll();
-        return announcements.stream().map(announcement -> {
-            // Get the total number of users the announcement was sent to
-            int totalRecipients = announcementReadStatusRepository.countByAnnouncement(announcement);
-
-            // Get the number of users who have read the announcement
-            int readCount = announcementReadStatusRepository.countByAnnouncementAndIsReadTrue(announcement);
-
-            // Calculate the read progress percentage
-            double readProgress = totalRecipients > 0 ? (readCount * 100.0 / totalRecipients) : 0.0;
-
-            // Set the read progress on the Announcement entity
-            announcement.setReadProgress(readProgress);
-
-            return announcement;
-        }).collect(Collectors.toList());
     }
 
 
@@ -156,7 +134,8 @@ public class AnnouncementService {
     protected void sendAnnouncementImmediately(Integer announcementId) throws MessagingException, IOException, TelegramApiException {
         Announcement announcement = announcementRepository.findById(Long.valueOf(announcementId))
                 .orElseThrow(() -> new RuntimeException("Announcement not found"));
-        // Add a check here to avoid sending twice
+
+        // Check if the announcement has already been sent
         if (announcement.getSent() == 1) {
             return; // Exit if already sent
         }
@@ -177,17 +156,22 @@ public class AnnouncementService {
         Set<String> emailAddresses = new HashSet<>();
         Set<Long> telegramUserIds = new HashSet<>();
 
-        for (Group group : announcement.getGroups()) {
+        // Ensure groups collection is mutable and initialized
+        List<Group> groups = Optional.ofNullable(announcement.getGroups()).orElseGet(ArrayList::new);
+        for (Group group : groups) {
             emailAddresses.addAll(staffService.getEmailsByGroupId(group.getId()));
             telegramUserIds.addAll(staffService.getTelegramUserIdByGroupId(group.getId()));
         }
 
-        for (AnnouncementReadStatus user : announcement.getStaffMembers()) {
+        // Ensure staff members collection is mutable and initialized
+        List<AnnouncementReadStatus> staffMembers = Optional.ofNullable(announcement.getStaffMembers()).orElseGet(ArrayList::new);
+        for (AnnouncementReadStatus user : staffMembers) {
             User staff = user.getStaff();
             emailAddresses.add(staff.getEmail());
             telegramUserIds.add(staff.getTelegram_user_id());
         }
 
+        // Check again if the announcement has been sent
         if (announcement.getSent() == 1) {
             throw new IllegalStateException("Announcement has already been sent.");
         } else {
@@ -196,8 +180,9 @@ public class AnnouncementService {
             }
             for (Long tuid : telegramUserIds) {
                 int messageId = announcementBotService.sendAnnouncementWithPDF(tuid, announcement, fileBytes);
+
                 // Update AnnouncementReadStatus with messageId
-                AnnouncementReadStatus readStatus = announcement.getStaffMembers().stream()
+                AnnouncementReadStatus readStatus = staffMembers.stream()
                         .filter(status -> status.getStaff().getTelegram_user_id().equals(tuid))
                         .findFirst()
                         .orElse(null);
@@ -302,39 +287,6 @@ public class AnnouncementService {
             connection.disconnect();
         }
 
-    }
-
-    public Map<String, Object> getAnnouncementDetails(int announcementId) {
-        Optional<Announcement> announcement = announcementRepository.findById((long) announcementId);
-        if (announcement.isEmpty()) {
-            return null; // Handle the case where the announcement is not found
-        }
-
-        List<AnnouncementReadStatus> readStatuses = announcementReadStatusRepository.findByAnnouncementId(announcementId);
-
-        Map<String, Object> result = new HashMap<>();
-        result.put("announcement", announcement.get());
-        result.put("readStatuses", readStatuses);
-
-        return result;
-    }
-    public Announcement getAnnouncementById(Long id) {
-        return announcementRepository.findById(id).orElse(null);
-    }
-    public byte[] downloadFile(String cloudUrl) throws IOException {
-        URL url = new URL(cloudUrl);
-        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-        connection.setRequestMethod("GET");
-
-        try (InputStream inputStream = connection.getInputStream();
-             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
-            byte[] buffer = new byte[4096];
-            int bytesRead;
-            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                outputStream.write(buffer, 0, bytesRead);
-            }
-            return outputStream.toByteArray();
-        }
     }
 
     public Map<String, Object> getAnnouncementDetails(int announcementId) {

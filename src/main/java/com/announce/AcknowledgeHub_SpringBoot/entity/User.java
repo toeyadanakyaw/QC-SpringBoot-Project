@@ -9,9 +9,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.time.LocalDateTime;
-import java.util.Collection;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Data
 @Entity
@@ -82,16 +80,14 @@ public class User implements UserDetails {
 
     @ManyToMany(mappedBy = "users")
     @JsonIgnore
-    private Set<Group> groups;
-
+    private Set<Group> groups = new HashSet<>(); // Initialize as a mutable set
     @ManyToMany
     @JoinTable(
             name = "user_announcement",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "announcement_id")
     )
-    private List<Announcement> acceptedAnnouncements;
-
+    private List<Announcement> acceptedAnnouncements = new ArrayList<>(); // Initialize as a mutable list
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority(role.name()));

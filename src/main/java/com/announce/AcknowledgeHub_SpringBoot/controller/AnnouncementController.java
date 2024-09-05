@@ -1,12 +1,11 @@
 package com.announce.AcknowledgeHub_SpringBoot.controller;
 
-import com.announce.AcknowledgeHub_SpringBoot.entity.Group;
-import com.announce.AcknowledgeHub_SpringBoot.entity.Notification;
-import com.announce.AcknowledgeHub_SpringBoot.entity.User;
+import com.announce.AcknowledgeHub_SpringBoot.entity.*;
 import com.announce.AcknowledgeHub_SpringBoot.model.AnnouncementDTO;
-import com.announce.AcknowledgeHub_SpringBoot.entity.Announcement;
+import com.announce.AcknowledgeHub_SpringBoot.repository.AnnouncementReadStatusRepository;
 import com.announce.AcknowledgeHub_SpringBoot.repository.NotificationRepo;
 import com.announce.AcknowledgeHub_SpringBoot.repository.UserRepository;
+import com.announce.AcknowledgeHub_SpringBoot.service.AnnouncementBotService;
 import com.announce.AcknowledgeHub_SpringBoot.service.AnnouncementService;
 import com.announce.AcknowledgeHub_SpringBoot.service.StaffService;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -20,14 +19,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.IOException;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -55,15 +53,6 @@ public class AnnouncementController {
         this.announcementBotService = announcementBotService;
         this.announcementReadStatusRepository = announcementReadStatusRepository;
     }
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private NotificationRepo notificationRepo;
-
-    @Autowired
-    private SimpMessagingTemplate simpMessagingTemplate;
-
 
     @GetMapping
     public ResponseEntity<List<Announcement>> getAllAnnouncements() {
@@ -85,7 +74,7 @@ public class AnnouncementController {
 
     @PostMapping(consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> createAnnouncement(@RequestPart(value = "file") MultipartFile file,
-                                                @RequestPart("data") String data) throws MessagingException, IOException {
+                                                @RequestPart("data") String data) throws MessagingException, IOException, TelegramApiException {
 
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
@@ -98,7 +87,9 @@ public class AnnouncementController {
         User user = userRepository.findById(dto.getUser_id()).orElseThrow(() -> new RuntimeException("User not found"));
 
         announcementEntity.setDocumentName(file.getOriginalFilename());
-        announcementEntity.setGroups(selectedGroups);
+        announcementEntity.setGroups(new ArrayList<>(selectedGroups)); // Ensure groups list is mutable
+
+        // Initialize and ensure staff members list is mutable
         List<AnnouncementReadStatus> announcementUsers = selectedStaff.stream()
                 .map(temp -> {
                     AnnouncementReadStatus staff = new AnnouncementReadStatus();
@@ -107,7 +98,8 @@ public class AnnouncementController {
                     // Set additional columns if needed
                     return staff;
                 })
-                .toList();
+                .collect(Collectors.toList()); // Collect to a mutable list
+
         announcementEntity.setStaffMembers(announcementUsers);
         announcementEntity.setUser(user);
 
@@ -124,7 +116,7 @@ public class AnnouncementController {
                 .collect(Collectors.toList());
 
         for (User recipient : recipients) {
-            System.out.println("Recipient ID"+recipient);
+            System.out.println("Recipient ID: " + recipient.getId());
             Notification notification = new Notification();
             notification.setUser(recipient);
             notification.setAnnouncement(createdAnnouncement);
@@ -132,12 +124,14 @@ public class AnnouncementController {
             notification.setCreated_at(new Date());
 
             notificationRepo.save(notification);
-            simpMessagingTemplate.convertAndSend("/topic/notifications"+recipient.getId(), notification);
+            simpMessagingTemplate.convertAndSend("/topic/notifications" + recipient.getId(), notification);
         }
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body("Announcement has been created and sent to targeted recipients");
     }
+
+
     @GetMapping("/download")
     public ResponseEntity<byte[]> downloadAnnouncementFile(@RequestParam("id") Long id) throws IOException {
         Announcement announcement = announcementService.getAnnouncementById(id);
@@ -195,52 +189,6 @@ public class AnnouncementController {
             default:
                 return MediaType.APPLICATION_OCTET_STREAM;
         }
-        return ResponseEntity.status(HttpStatus.OK)
-                .body("Cancelled the schedule for announcement ID " + id + " successfully.");
     }
-
-
-//    @GetMapping
-//    public ResponseEntity<List<AnnouncementDTO>>getAnnouncements(){
-//        List<Announcement>announcementEntities=announcementService.getAnnouncements();
-//        if(!announcementEntities.isEmpty()){
-//            List<AnnouncementDTO> dtos=announcementEntities.stream()
-//                    .map(announcements -> mapper.map(announcements, AnnouncementDTO.class))
-//                    .toList();
-//            return new ResponseEntity<>(dtos,HttpStatus.OK);
-//        }
-//        return new ResponseEntity<>(HttpStatus.NOT_FOUND);
-//    }
-
-//    @PutMapping("{id}/re-schedule")
-//    public ResponseEntity<?> reScheduleAnnouncement(@PathVariable int id, @RequestPart(value = "file", required = false) MultipartFile file,
-//                                                    @RequestPart("data") String data) throws JsonProcessingException{
-//
-//        ObjectMapper objectMapper = new ObjectMapper();
-//        objectMapper.registerModule(new JavaTimeModule()); // Register the JavaTimeModule
-//        objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-//        AnnouncementDTO dto = objectMapper.readValue(data, AnnouncementDTO.class);
-//
-//        boolean isUpdated = announcementService.updateScheduledAnnouncement(id, dto.getScheduledDate());
-//        if(!isUpdated){
-//            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-//                    .body("Cannot reschedule an announcement that has already been sent");
-//        }
-//        return ResponseEntity.status(HttpStatus.OK)
-//                .body("Rescheduled the announcement successfully");
-//    }
-//
-//    @PutMapping("{id}/cancel-schedule")
-//    public ResponseEntity<?> cancelScheduleAnnouncement(@PathVariable int id) {
-//        boolean isCancelled = announcementService.cancelScheduledAnnouncement(id);
-//        if(!isCancelled){
-//            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-//                    .body("Cannot cancel a scheduled announcement that has already been sent");
-//        }
-//        return ResponseEntity.status(HttpStatus.OK)
-//                .body("Cancelled the schedule for announcement ID " + id + " successfully.");
-//    }
-
-
 
 }

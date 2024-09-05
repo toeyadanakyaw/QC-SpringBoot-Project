@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Data
@@ -55,14 +56,12 @@ public class Announcement {
              joinColumns = @JoinColumn(name = "announcement_id"),
              inverseJoinColumns = @JoinColumn(name = "group_id")
      )
-     private List<Group> groups;
-
+     private List<Group> groups = new ArrayList<>(); // Initialize as a mutable list
      @OneToMany(fetch = FetchType.EAGER,
              mappedBy = "announcement",
              cascade = CascadeType.ALL,
              orphanRemoval = true)
-     private List<AnnouncementReadStatus> staffMembers;
-
+     private List<AnnouncementReadStatus> staffMembers = new ArrayList<>(); // Initialize as a mutable list
      @ManyToOne
      @JoinColumn(name = "user_id")
      private User user;

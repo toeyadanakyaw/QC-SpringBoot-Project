@@ -169,8 +169,18 @@ public class AnnouncementBotService extends TelegramLongPollingBot {
         System.out.println("handleButtonClick triggered with action: " + action + ", announcementId: " + announcementId + ", chatId: " + chatId);
         if ("read".equals(action)) {
             boolean isNowRead = toggleMessageReadStatus(chatId, user, Integer.parseInt(announcementId));
-            // Toggle button text
-            sendUpdatedMessageWithButton(chatId, announcementId, isNowRead);
+
+            // Retrieve the messageId associated with the announcement read status for the specific user
+            AnnouncementReadStatus readStatus = announcementReadStatusRepository.findByAnnouncementAndStaff(
+                    announcementRepository.findById((long) Integer.parseInt(announcementId)).orElse(null), user);
+
+            if (readStatus != null) {
+                Integer messageId = readStatus.getMessageId();
+                // Call the updated method with messageId
+                sendUpdatedMessageWithButton(chatId, announcementId, isNowRead, messageId);
+            } else {
+                System.out.println("No read status found for announcementId: " + announcementId);
+            }
         }
     }
 
@@ -229,7 +239,7 @@ public class AnnouncementBotService extends TelegramLongPollingBot {
         return false;
     }
 
-    private void sendUpdatedMessageWithButton(Long chatId, String announcementId, boolean isRead) {
+    private void sendUpdatedMessageWithButton(Long chatId, String announcementId, boolean isRead, Integer messageId) {
         String buttonText = isRead ? "✅ Marked" : "🔄 Mark as Read";
         String callbackData = "read_" + announcementId;
 
@@ -239,12 +249,18 @@ public class AnnouncementBotService extends TelegramLongPollingBot {
         readButton.setCallbackData(callbackData);
         markup.setKeyboard(List.of(List.of(readButton)));
 
-        // Find the message ID from the stored status
-        AnnouncementReadStatus readStatus = announcementReadStatusRepository.findByAnnouncementId(Integer.valueOf(announcementId));
-        if (readStatus != null) {
-            Integer messageId = readStatus.getMessageId();
+        // Find the announcement read status for the specific user, announcement, and message ID
+        User user = staffRepository.findByTelegramUserIdToGetUName(chatId); // Get the user object by Telegram user ID
+        if (user == null) {
+            System.out.println("User not found for telegram user ID: " + chatId);
+            return;
+        }
 
-            // Update the message
+        AnnouncementReadStatus readStatus = announcementReadStatusRepository.findByAnnouncementIdAndUserIdAndMessageId(
+                Integer.valueOf(announcementId), user.getId(), messageId); // Use the provided messageId
+
+        if (readStatus != null) {
+            // Update the message with the new button state
             EditMessageReplyMarkup editMarkup = new EditMessageReplyMarkup();
             editMarkup.setChatId(String.valueOf(chatId));
             editMarkup.setReplyMarkup(markup);
@@ -256,7 +272,7 @@ public class AnnouncementBotService extends TelegramLongPollingBot {
                 e.printStackTrace();
             }
         } else {
-            System.out.println("Message ID not found for announcementId: " + announcementId);
+            System.out.println("No read status found for announcementId: " + announcementId);
         }
     }
 
